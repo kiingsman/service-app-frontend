@@ -7,7 +7,7 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // This uses your Vercel Environment Variable REACT_APP_API_URL
+    // Fetches data using your Vercel Environment Variable
     axios.get(`${process.env.REACT_APP_API_URL}/api/services`)
       .then((response) => {
         setServices(response.data);
@@ -21,50 +21,64 @@ function App() {
 
   return (
     <div className="App">
-      <header className="App-header">
-        <h1 style={{ marginBottom: '40px' }}>Service Marketplace</h1>
+      <header className="App-header" style={{ padding: '40px 20px' }}>
+        <h1 style={{ marginBottom: '50px', fontSize: '2.5rem', fontWeight: 'bold' }}>
+          Service Marketplace
+        </h1>
         
         {loading ? (
           <div className="loader">
-            <p>Fetching your services...</p>
+            <p>Loading your services...</p>
           </div>
         ) : (
           <div className="service-list" style={{ 
             display: 'flex', 
             flexWrap: 'wrap', 
             justifyContent: 'center',
-            gap: '20px',
-            padding: '20px'
+            gap: '30px',
+            maxWidth: '1200px',
+            margin: '0 auto'
           }}>
             {services.map(service => (
               <div key={service._id} className="service-card" style={{
-                border: '2px solid rgba(255, 255, 255, 0.2)', 
-                padding: '25px', 
-                borderRadius: '15px',
-                width: '280px',
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)',
-                backdropFilter: 'blur(5px)'
-              }}>
-                {/* Updated to use .title to match your backend */}
-                <h3 style={{ color: '#61dafb', fontSize: '1.5rem' }}>{service.title}</h3>
+                background: 'rgba(255, 255, 255, 0.08)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                borderRadius: '20px',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                padding: '30px',
+                width: '300px',
+                boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+                transition: 'transform 0.3s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-10px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                {/* Matches the .title key from your backend */}
+                <h3 style={{ color: '#61dafb', margin: '0 0 15px 0', fontSize: '1.6rem' }}>
+                  {service.title}
+                </h3>
                 
-                <p style={{ fontSize: '1.2rem', margin: '20px 0' }}>
-                  Price: <span style={{ fontWeight: 'bold' }}>₦{service.price.toLocaleString()}</span>
+                <p style={{ fontSize: '1.2rem', opacity: '0.9', marginBottom: '25px' }}>
+                  Price: <span style={{ fontWeight: 'bold', color: '#fff' }}>
+                    ₦{typeof service.price === 'number' ? service.price.toLocaleString() : service.price}
+                  </span>
                 </p>
                 
                 <button style={{ 
-                  padding: '12px 24px', 
+                  width: '100%',
+                  padding: '12px', 
                   cursor: 'pointer',
                   backgroundColor: '#61dafb',
-                  border: 'none',
-                  borderRadius: '5px',
-                  fontWeight: 'bold',
                   color: '#282c34',
-                  transition: 'transform 0.2s'
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  fontSize: '1rem',
+                  transition: 'background 0.3s'
                 }}
-                onMouseOver={(e) => e.target.style.transform = 'scale(1.05)'}
-                onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#4fa8c7'}
+                onMouseOut={(e) => e.target.style.backgroundColor = '#61dafb'}
                 >
                   Book Now
                 </button>
