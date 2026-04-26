@@ -9,17 +9,14 @@ const socket = io(API_URL);
 function App() {
   const [services, setServices] = useState([]);
   const [bookings, setBookings] = useState([]);
-  const [allJobs, setAllJobs] = useState([]); // For Provider View
-  const [isProvider, setIsProvider] = useState(false); // Toggle between User and Admin
+  const [allJobs, setAllJobs] = useState([]); 
+  const [isProvider, setIsProvider] = useState(false); 
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')) || null);
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  
-  // Booking Form State
   const [bookingDetails, setBookingDetails] = useState({ date: '', address: '', notes: '' });
-
   const [activeChat, setActiveChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState("");
@@ -34,54 +31,43 @@ function App() {
       setServices(res.data);
       setLoading(false);
     });
-
-    if (user) {
-      fetchData();
-    }
-
+    if (user) fetchData();
     socket.on("receive_message", (data) => setMessages(prev => [...prev, data]));
     return () => socket.off("receive_message");
   }, [user]);
 
   const fetchData = async () => {
-    // Get User's own history
-    const myRes = await axios.get(`${API_URL}/api/bookings/my/${user.email}`);
-    setBookings(myRes.data);
-
-    // Get All Jobs (Provider View)
-    const allRes = await axios.get(`${API_URL}/api/bookings/provider`);
-    setAllJobs(allRes.data);
+    try {
+      const myRes = await axios.get(`${API_URL}/api/bookings/my/${user.email}`);
+      setBookings(myRes.data);
+      const allRes = await axios.get(`${API_URL}/api/bookings/provider`);
+      setAllJobs(allRes.data);
+    } catch (err) { console.error("Fetch error", err); }
   };
 
   const handleAuth = async (e) => {
     e.preventDefault();
-    const endpoint = isRegistering ? '/api/auth/register' : '/api/auth/login';
     try {
+      const endpoint = isRegistering ? '/api/auth/register' : '/api/auth/login';
       const res = await axios.post(`${API_URL}${endpoint}`, { email, password });
-      if (isRegistering) { alert("Success! Please Login."); setIsRegistering(false); }
+      if (isRegistering) { setIsRegistering(false); alert("Registered!"); }
       else { localStorage.setItem('user', JSON.stringify(res.data)); setUser(res.data); }
     } catch (err) { alert("Auth Failed"); }
   };
 
   const handlePay = async (service) => {
-    if (!bookingDetails.address || !bookingDetails.date) {
-      alert("Please enter service date and address first!");
-      return;
-    }
+    if (!bookingDetails.address || !bookingDetails.date) return alert("Fill Address & Date!");
     try {
       const res = await axios.post(`${API_URL}/api/payments/initialize`, { 
-        email: user.email, 
-        amount: service.price,
-        serviceTitle: service.title,
-        ...bookingDetails
+        email: user.email, amount: service.price, serviceTitle: service.title, ...bookingDetails
       });
       if (res.data.authorization_url) window.location.href = res.data.authorization_url;
-    } catch (err) { alert("Payment error"); }
+    } catch (err) { alert("Payment init failed"); }
   };
 
   const updateStatus = async (id, newStatus) => {
     await axios.put(`${API_URL}/api/bookings/${id}/status`, { status: newStatus });
-    fetchData(); // Refresh list
+    fetchData(); 
   };
 
   const sendMessage = () => {
@@ -93,98 +79,112 @@ function App() {
     }
   };
 
-  if (!user) {
-    return (
-      <div className="App-header">
-        <div style={{ background: '#222', padding: '30px', borderRadius: '15px' }}>
-          <h2>{isRegistering ? "Register" : "Login"}</h2>
-          <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <input type="email" placeholder="Email" onChange={e => setEmail(e.target.value)} required />
-            <input type="password" placeholder="Password" onChange={e => setPassword(e.target.value)} required />
-            <button type="submit">{isRegistering ? "Register" : "Login"}</button>
-          </form>
-          <p onClick={() => setIsRegistering(!isRegistering)} style={{ cursor: 'pointer', color: '#61dafb' }}>
-            {isRegistering ? "Switch to Login" : "New? Register"}
-          </p>
-        </div>
+  // Stats for Admin
+  const totalRevenue = allJobs.filter(j => j.status === 'PAID' || j.status === 'COMPLETED').reduce((sum, j) => sum + j.amount, 0);
+
+  if (!user) return (
+    <div className="App-header">
+      <div className="auth-card" style={{ background: '#1a1a1a', padding: '40px', borderRadius: '15px', border: '1px solid #333' }}>
+        <h2>{isRegistering ? "Join @cloud_guy_nigeria" : "Provider Login"}</h2>
+        <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <input type="email" placeholder="Email" onChange={e => setEmail(e.target.value)} required />
+          <input type="password" placeholder="Password" onChange={e => setPassword(e.target.value)} required />
+          <button type="submit" style={{ background: '#61dafb', color: '#000' }}>{isRegistering ? "Register" : "Login"}</button>
+        </form>
+        <p onClick={() => setIsRegistering(!isRegistering)} style={{ cursor: 'pointer', color: '#61dafb', marginTop: '15px' }}>
+          {isRegistering ? "Back to Login" : "Need an account? Register"}
+        </p>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
     <div className="App">
-      <header className="App-header" style={{ padding: '20px' }}>
-        <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', maxWidth: '1200px' }}>
-          <h1>@cloud_guy_nigeria {isProvider ? 'ADMIN' : 'Marketplace'}</h1>
-          <div>
-            <button onClick={() => setIsProvider(!isProvider)} style={{ marginRight: '10px', background: '#61dafb' }}>
-              Switch to {isProvider ? 'Customer View' : 'Provider View'}
-            </button>
-            <button onClick={() => { localStorage.clear(); window.location.reload(); }}>Logout</button>
-          </div>
+      <nav style={{ background: '#111', padding: '15px 30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333' }}>
+        <h2 style={{ color: '#61dafb', margin: 0 }}>@cloud_guy_nigeria {isProvider ? 'PRO' : 'MARKET'}</h2>
+        <div>
+          <button onClick={() => setIsProvider(!isProvider)} style={{ marginRight: '15px', background: isProvider ? '#ff9800' : '#4CAF50', color: '#fff' }}>
+            {isProvider ? '🏠 Switch to Client View' : '⚙️ Provider Dashboard'}
+          </button>
+          <button onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ background: 'transparent', border: '1px solid #ff4b2b', color: '#ff4b2b' }}>Logout</button>
         </div>
+      </nav>
 
+      <main style={{ padding: '40px' }}>
         {isProvider ? (
-          /* PROVIDER VIEW (ADMIN) */
-          <div style={{ width: '100%', maxWidth: '1000px', marginTop: '30px' }}>
-            <h2>Incoming Job Requests</h2>
+          <div className="provider-dashboard">
+            <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
+              <div className="stat-card" style={{ background: '#222', padding: '20px', borderRadius: '10px', flex: 1, borderLeft: '5px solid #4CAF50' }}>
+                <p>Total Revenue</p>
+                <h3>₦{totalRevenue.toLocaleString()}</h3>
+              </div>
+              <div className="stat-card" style={{ background: '#222', padding: '20px', borderRadius: '10px', flex: 1, borderLeft: '5px solid #2196F3' }}>
+                <p>Active Jobs</p>
+                <h3>{allJobs.filter(j => j.status === 'PAID' || j.status === 'ACCEPTED').length}</h3>
+              </div>
+            </div>
+
+            <h2 style={{ textAlign: 'left' }}>Work Orders</h2>
             {allJobs.map(job => (
-              <div key={job._id} style={{ background: '#333', margin: '10px 0', padding: '15px', borderRadius: '10px', textAlign: 'left' }}>
-                <h3>{job.serviceTitle} - <span style={{ color: '#61dafb' }}>{job.status}</span></h3>
-                <p><strong>Customer:</strong> {job.userEmail}</p>
-                <p><strong>Location:</strong> {job.address}</p>
-                <p><strong>Scheduled:</strong> {job.date}</p>
-                <p><strong>Notes:</strong> {job.notes}</p>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button onClick={() => updateStatus(job._id, 'ACCEPTED')} style={{ background: '#4CAF50' }}>Accept Job</button>
-                  <button onClick={() => updateStatus(job._id, 'COMPLETED')} style={{ background: '#2196F3' }}>Mark Completed</button>
+              <div key={job._id} style={{ background: '#1a1a1a', marginBottom: '15px', padding: '20px', borderRadius: '12px', textAlign: 'left', border: '1px solid #333' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <h3>{job.serviceTitle}</h3>
+                  <span style={{ padding: '5px 12px', borderRadius: '20px', background: job.status === 'PAID' ? '#4CAF50' : '#333', fontSize: '0.8rem' }}>{job.status}</span>
+                </div>
+                <p style={{ color: '#aaa' }}>📍 {job.address} | 📅 {job.date}</p>
+                <p><strong>Note:</strong> {job.notes || "No special instructions"}</p>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                  {job.status === 'PAID' && <button onClick={() => updateStatus(job._id, 'ACCEPTED')} style={{ background: '#4CAF50' }}>Accept Job</button>}
+                  {job.status === 'ACCEPTED' && <button onClick={() => updateStatus(job._id, 'COMPLETED')} style={{ background: '#2196F3' }}>Mark Completed</button>}
+                  <button onClick={() => { setActiveChat({_id: job._id, title: job.userEmail}); socket.emit("join_room", job._id); }} style={{ background: '#555' }}>Chat Client</button>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          /* CUSTOMER VIEW */
-          <>
-            <div style={{ background: '#333', padding: '20px', borderRadius: '15px', marginTop: '20px', width: '100%', maxWidth: '600px' }}>
-              <h3>Step 1: Set Booking Info</h3>
-              <input type="date" onChange={e => setBookingDetails({...bookingDetails, date: e.target.value})} style={{ margin: '5px' }} />
-              <input type="text" placeholder="Service Address (Kano)" onChange={e => setBookingDetails({...bookingDetails, address: e.target.value})} style={{ margin: '5px', width: '80%' }} />
-              <textarea placeholder="Urgent notes for Cloud Guy..." onChange={e => setBookingDetails({...bookingDetails, notes: e.target.value})} style={{ margin: '5px', width: '80%' }} />
+          <div className="client-view">
+             <div style={{ background: '#222', padding: '25px', borderRadius: '15px', marginBottom: '40px', border: '1px solid #61dafb' }}>
+              <h3 style={{ marginTop: 0 }}>Request a Service</h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px' }}>
+                <input type="date" onChange={e => setBookingDetails({...bookingDetails, date: e.target.value})} style={{ flex: 1 }} />
+                <input type="text" placeholder="Your Address in Kano" onChange={e => setBookingDetails({...bookingDetails, address: e.target.value})} style={{ flex: 2 }} />
+                <input type="text" placeholder="Urgent notes (e.g., Solar panel leak)" onChange={e => setBookingDetails({...bookingDetails, notes: e.target.value})} style={{ flex: 2 }} />
+              </div>
             </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginTop: '30px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '25px' }}>
               {services.map(s => (
-                <div key={s._id} style={{ background: '#222', padding: '20px', borderRadius: '15px', width: '250px' }}>
+                <div key={s._id} className="service-card" style={{ background: '#1a1a1a', padding: '25px', borderRadius: '20px', width: '280px', border: '1px solid #333' }}>
                   <h3>{s.title}</h3>
-                  <p>₦{s.price.toLocaleString()}</p>
-                  <button onClick={() => { setActiveChat(s); socket.emit("join_room", s._id); }}>Chat</button>
-                  <button onClick={() => handlePay(s)} style={{ background: '#4CAF50', marginLeft: '5px' }}>Pay Now</button>
+                  <p style={{ fontSize: '1.4rem', color: '#61dafb' }}>₦{s.price.toLocaleString()}</p>
+                  <button onClick={() => handlePay(s)} style={{ width: '100%', padding: '12px', background: '#4CAF50', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 'bold' }}>Book Now</button>
                 </div>
               ))}
             </div>
-
-            <div style={{ marginTop: '50px', textAlign: 'left', width: '100%', maxWidth: '800px' }}>
-              <h2>My Booking History</h2>
-              {bookings.map(b => (
-                <div key={b._id} style={{ borderBottom: '1px solid #444', padding: '10px' }}>
-                  {b.serviceTitle} - <strong>{b.status}</strong> (Ref: {b.reference})
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {activeChat && (
-          <div className="chat-box" style={{ position: 'fixed', bottom: '10px', right: '10px', background: '#111', border: '1px solid #61dafb', width: '300px', height: '400px' }}>
-            <div style={{ background: '#61dafb', color: '#000', padding: '5px' }}>Chat: {activeChat.title}</div>
-            <div style={{ height: '320px', overflowY: 'auto' }}>
-              {messages.filter(m => m.roomId === activeChat._id).map((m, i) => <div key={i}>{m.sender}: {m.message}</div>)}
-              <div ref={chatEndRef} />
-            </div>
-            <input value={inputMessage} onChange={e => setInputMessage(e.target.value)} onKeyPress={e => e.key === 'Enter' && sendMessage()} />
           </div>
         )}
-      </header>
+      </main>
+
+      {activeChat && (
+        <div style={{ position: 'fixed', bottom: '20px', right: '20px', width: '320px', background: '#111', border: '1px solid #61dafb', borderRadius: '15px', overflow: 'hidden' }}>
+          <div style={{ background: '#61dafb', color: '#000', padding: '10px', display: 'flex', justifyContent: 'space-between' }}>
+            <strong>Chat</strong>
+            <button onClick={() => setActiveChat(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
+          </div>
+          <div style={{ height: '300px', overflowY: 'auto', padding: '15px' }}>
+            {messages.filter(m => m.roomId === activeChat._id).map((m, i) => (
+              <div key={i} style={{ textAlign: m.sender === user.email ? 'right' : 'left', margin: '5px 0' }}>
+                <span style={{ background: m.sender === user.email ? '#61dafb' : '#333', color: m.sender === user.email ? '#000' : '#fff', padding: '5px 10px', borderRadius: '10px', fontSize: '0.9rem' }}>{m.message}</span>
+              </div>
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+          <div style={{ padding: '10px', display: 'flex', gap: '5px' }}>
+            <input value={inputMessage} onChange={e => setInputMessage(e.target.value)} onKeyPress={e => e.key === 'Enter' && sendMessage()} placeholder="Type..." style={{ flex: 1 }} />
+            <button onClick={sendMessage} style={{ background: '#61dafb', padding: '8px 15px' }}>Send</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
