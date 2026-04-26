@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import axios from 'axios';
 import io from 'socket.io-client';
 import './App.css';
@@ -11,7 +11,6 @@ function App() {
   const [bookings, setBookings] = useState([]);
   const [allJobs, setAllJobs] = useState([]); 
   const [isProvider, setIsProvider] = useState(false); 
-  const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')) || null);
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState("");
@@ -22,6 +21,19 @@ function App() {
   const [inputMessage, setInputMessage] = useState("");
   const chatEndRef = useRef(null);
 
+  // Memoize fetchData so it can be safely used in useEffect
+  const fetchData = useCallback(async () => {
+    if (!user) return;
+    try {
+      const myRes = await axios.get(`${API_URL}/api/bookings/my/${user.email}`);
+      setBookings(myRes.data);
+      const allRes = await axios.get(`${API_URL}/api/bookings/provider`);
+      setAllJobs(allRes.data);
+    } catch (err) { 
+      console.error("Fetch error", err); 
+    }
+  }, [user]);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -29,40 +41,46 @@ function App() {
   useEffect(() => {
     axios.get(`${API_URL}/api/services`).then(res => {
       setServices(res.data);
-      setLoading(false);
     });
-    if (user) fetchData();
+
+    if (user) {
+      fetchData();
+    }
+
     socket.on("receive_message", (data) => setMessages(prev => [...prev, data]));
     return () => socket.off("receive_message");
-  }, [user]);
-
-  const fetchData = async () => {
-    try {
-      const myRes = await axios.get(`${API_URL}/api/bookings/my/${user.email}`);
-      setBookings(myRes.data);
-      const allRes = await axios.get(`${API_URL}/api/bookings/provider`);
-      setAllJobs(allRes.data);
-    } catch (err) { console.error("Fetch error", err); }
-  };
+  }, [user, fetchData]);
 
   const handleAuth = async (e) => {
     e.preventDefault();
     try {
       const endpoint = isRegistering ? '/api/auth/register' : '/api/auth/login';
       const res = await axios.post(`${API_URL}${endpoint}`, { email, password });
-      if (isRegistering) { setIsRegistering(false); alert("Registered!"); }
-      else { localStorage.setItem('user', JSON.stringify(res.data)); setUser(res.data); }
-    } catch (err) { alert("Auth Failed"); }
+      if (isRegistering) { 
+        setIsRegistering(false); 
+        alert("Registered!"); 
+      } else { 
+        localStorage.setItem('user', JSON.stringify(res.data)); 
+        setUser(res.data); 
+      }
+    } catch (err) { 
+      alert("Auth Failed"); 
+    }
   };
 
   const handlePay = async (service) => {
     if (!bookingDetails.address || !bookingDetails.date) return alert("Fill Address & Date!");
     try {
       const res = await axios.post(`${API_URL}/api/payments/initialize`, { 
-        email: user.email, amount: service.price, serviceTitle: service.title, ...bookingDetails
+        email: user.email, 
+        amount: service.price, 
+        serviceTitle: service.title, 
+        ...bookingDetails
       });
       if (res.data.authorization_url) window.location.href = res.data.authorization_url;
-    } catch (err) { alert("Payment init failed"); }
+    } catch (err) { 
+      alert("Payment init failed"); 
+    }
   };
 
   const updateStatus = async (id, newStatus) => {
@@ -79,16 +97,17 @@ function App() {
     }
   };
 
-  // Stats for Admin
-  const totalRevenue = allJobs.filter(j => j.status === 'PAID' || j.status === 'COMPLETED').reduce((sum, j) => sum + j.amount, 0);
+  const totalRevenue = allJobs
+    .filter(j => j.status === 'PAID' || j.status === 'COMPLETED')
+    .reduce((sum, j) => sum + j.amount, 0);
 
   if (!user) return (
     <div className="App-header">
       <div className="auth-card" style={{ background: '#1a1a1a', padding: '40px', borderRadius: '15px', border: '1px solid #333' }}>
         <h2>{isRegistering ? "Join @cloud_guy_nigeria" : "Provider Login"}</h2>
         <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <input type="email" placeholder="Email" onChange={e => setEmail(e.target.value)} required />
-          <input type="password" placeholder="Password" onChange={e => setPassword(e.target.value)} required />
+          <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required />
+          <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
           <button type="submit" style={{ background: '#61dafb', color: '#000' }}>{isRegistering ? "Register" : "Login"}</button>
         </form>
         <p onClick={() => setIsRegistering(!isRegistering)} style={{ cursor: 'pointer', color: '#61dafb', marginTop: '15px' }}>
@@ -146,9 +165,9 @@ function App() {
              <div style={{ background: '#222', padding: '25px', borderRadius: '15px', marginBottom: '40px', border: '1px solid #61dafb' }}>
               <h3 style={{ marginTop: 0 }}>Request a Service</h3>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px' }}>
-                <input type="date" onChange={e => setBookingDetails({...bookingDetails, date: e.target.value})} style={{ flex: 1 }} />
-                <input type="text" placeholder="Your Address in Kano" onChange={e => setBookingDetails({...bookingDetails, address: e.target.value})} style={{ flex: 2 }} />
-                <input type="text" placeholder="Urgent notes (e.g., Solar panel leak)" onChange={e => setBookingDetails({...bookingDetails, notes: e.target.value})} style={{ flex: 2 }} />
+                <input type="date" value={bookingDetails.date} onChange={e => setBookingDetails({...bookingDetails, date: e.target.value})} style={{ flex: 1 }} />
+                <input type="text" placeholder="Your Address in Kano" value={bookingDetails.address} onChange={e => setBookingDetails({...bookingDetails, address: e.target.value})} style={{ flex: 2 }} />
+                <input type="text" placeholder="Urgent notes (e.g., Solar panel leak)" value={bookingDetails.notes} onChange={e => setBookingDetails({...bookingDetails, notes: e.target.value})} style={{ flex: 2 }} />
               </div>
             </div>
 
@@ -160,6 +179,16 @@ function App() {
                   <button onClick={() => handlePay(s)} style={{ width: '100%', padding: '12px', background: '#4CAF50', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 'bold' }}>Book Now</button>
                 </div>
               ))}
+            </div>
+
+            <div style={{ marginTop: '50px', textAlign: 'left' }}>
+              <h2>My Booking History</h2>
+              {bookings.length > 0 ? bookings.map(b => (
+                <div key={b._id} style={{ background: '#222', margin: '10px 0', padding: '15px', borderRadius: '10px' }}>
+                  <strong>{b.serviceTitle}</strong> - <span style={{ color: '#61dafb' }}>{b.status}</span>
+                  <p style={{ margin: '5px 0 0', fontSize: '0.8rem', color: '#888' }}>Ref: {b.reference}</p>
+                </div>
+              )) : <p>No bookings yet.</p>}
             </div>
           </div>
         )}
