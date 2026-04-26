@@ -21,7 +21,6 @@ function App() {
   const [inputMessage, setInputMessage] = useState("");
   const chatEndRef = useRef(null);
 
-  // Memoize fetchData so it can be safely used in useEffect
   const fetchData = useCallback(async () => {
     if (!user) return;
     try {
@@ -71,15 +70,19 @@ function App() {
   const handlePay = async (service) => {
     if (!bookingDetails.address || !bookingDetails.date) return alert("Fill Address & Date!");
     try {
+      // FIX: Convert Naira to Kobo for Paystack (amount * 100)
+      const amountInKobo = Math.round(service.price * 100);
+
       const res = await axios.post(`${API_URL}/api/payments/initialize`, { 
         email: user.email, 
-        amount: service.price, 
+        amount: amountInKobo, 
         serviceTitle: service.title, 
         ...bookingDetails
       });
       if (res.data.authorization_url) window.location.href = res.data.authorization_url;
     } catch (err) { 
-      alert("Payment init failed"); 
+      console.error("Payment error:", err);
+      alert("Payment init failed. Ensure your Secret Key is set in Render."); 
     }
   };
 
@@ -99,7 +102,7 @@ function App() {
 
   const totalRevenue = allJobs
     .filter(j => j.status === 'PAID' || j.status === 'COMPLETED')
-    .reduce((sum, j) => sum + j.amount, 0);
+    .reduce((sum, j) => sum + (j.amount / 100), 0); // Convert back to Naira for display
 
   if (!user) return (
     <div className="App-header">
